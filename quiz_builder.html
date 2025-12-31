@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>מחולל שאלון גימטריה</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts -->
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap');
+      body {
+        font-family: 'Heebo', sans-serif;
+      }
+      /* Hide scrollbar for cleaner UI */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #888; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #555; 
+      }
+    </style>
+
+    <!-- React & ReactDOM (UMD) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (for JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Libraries (UMD) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Lucide React Icons -->
+    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.min.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- CONSTANTS & UTILS ---
+        
+        const { useState, useMemo, useEffect, useRef } = React;
+        const { CheckCircle, XCircle, Download, FileText, Info, Save } = lucideReact;
+
+        const CORRECT_LETTERS_MAP = {
+            1: 'F',
+            2: 'L',
+            3: 'B',
+            4: 'S',
+            5: 'GG',
+            6: 'E',
+            7: 'G',
+            8: 'E',
+            9: 'D',
+            10: 'G',
+        };
+
+        const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+        // Fisher-Yates shuffle
+        const shuffleArray = (array) => {
+            const newArr = [...array];
+            for (let i = newArr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+            }
+            return newArr;
+        };
+
+        const getWrongLetters = (exclude, count) => {
+            // Filter out the correct letter (and its first char just in case)
+            const available = ALPHABET.split('').filter(char => char !== exclude && char !== exclude[0]);
+            return shuffleArray(available).slice(0, count);
+        };
+
+        // --- COMPONENTS ---
+
+        const QuestionInput = ({ questionNumber, data, onChange }) => {
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 mb-6 transition-all hover:shadow-lg">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <span className="bg-blue-600 text-white w-8 h-8 flex items-center justify-center rounded-full text-sm">
+                            {questionNumber}
+                        </span>
+                        הזנת שאלה {questionNumber}
+                    </h3>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">השאלה:</label>
+                            <input
+                                type="text"
+                                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                placeholder="הקלד את השאלה כאן..."
+                                value={data.text}
+                                onChange={(e) => onChange(data.id, 'text', e.target.value)}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            {/* Correct Answer Input */}
+                            <div className="relative">
+                                <label className="flex items-center gap-1 text-sm font-bold text-green-700 mb-1">
+                                    <CheckCircle size={16} />
+                                    תשובה נכונה
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full p-2 border-2 border-green-400 bg-green-50 rounded-md focus:ring-2 focus:ring-green-500 focus:outline-none placeholder-green-700/50"
+                                    placeholder="הזן את התשובה נכונה"
+                                    value={data.correctAnswer}
+                                    onChange={(e) => onChange(data.id, 'correctAnswer', e.target.value)}
+                                />
+                            </div>
+
+                            {/* Wrong Answers Inputs */}
+                            {data.wrongAnswers.map((ans, idx) => (
+                                <div key={`wrong-${idx}`} className="relative">
+                                    <label className="flex items-center gap-1 text-sm font-bold text-red-700 mb-1">
+                                        <XCircle size={16} />
+                                        תשובה שגויה {idx + 1}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-2 border-2 border-red-300 bg-red-50 rounded-md focus:ring-2 focus:ring-red-500 focus:outline-none placeholder-red-700/50"
+                                        placeholder="הזן תשובה שגויה"
+                                        value={ans}
+                                        onChange={(e) => onChange(data.id, 'wrongAnswer', e.target.value, idx)}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const PrintPreview = ({ questions, id }) => {
+            const preparedQuestions = useMemo(() => {
+                return questions.map((q) => {
+                    const correctLetter = CORRECT_LETTERS_MAP[q.id] || '?';
+                    const wrongLetters = getWrongLetters(correctLetter, 3);
+                    
+                    const options = [
+                        { text: q.correctAnswer, letter: correctLetter, isCorrect: true },
+                        { text: q.wrongAnswers[0], letter: wrongLetters[0], isCorrect: false },
+                        { text: q.wrongAnswers[1], letter: wrongLetters[1], isCorrect: false },
+                        { text: q.wrongAnswers[2], letter: wrongLetters[2], isCorrect: false },
+                    ];
+
+                    return {
+                        ...q,
+                        shuffledOptions: shuffleArray(options),
+                    };
+                });
+            }, [questions]);
+
+            const containerStyle = {
+                backgroundColor: 'white',
+                width: '210mm',
+                minHeight: '297mm',
+                padding: '20mm',
+                boxSizing: 'border-box',
+                position: 'relative',
+            };
+
+            return (
+                <div id={id} className="text-black mx-auto" style={containerStyle}>
+                    {/* Decorative Border */}
+                    <div className="absolute inset-5 border-4 border-double border-black pointer-events-none"></div>
+
+                    <div className="h-full flex flex-col justify-between relative z-10">
+                        <div>
+                            {/* Header */}
+                            <div className="text-center mb-8 pb-4 border-b-2 border-black">
+                                <h1 className="text-4xl font-extrabold mb-2 tracking-wide text-black">מכירים מספיק טוב?</h1>
+                                <h2 className="text-2xl font-normal text-black">עימדו במעגל וענו על כל השאלות</h2>
+                            </div>
+
+                            {/* Questions Grid */}
+                            <div className="space-y-6">
+                                {preparedQuestions.map((q, index) => (
+                                    <div key={q.id} className="break-inside-avoid">
+                                        {/* Question Title */}
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="w-8 h-8 bg-black text-white rounded-full flex items-center justify-center shrink-0">
+                                                <span className="font-bold text-lg leading-none -translate-y-[2px]">{index + 1}</span>
+                                            </div>
+                                            <p className="font-bold text-xl leading-tight text-black">{q.text || '___________________'}</p>
+                                        </div>
+                                        
+                                        {/* Answers Grid */}
+                                        <div className="grid grid-cols-2 gap-x-12 gap-y-3 pr-11">
+                                            {q.shuffledOptions.map((opt, i) => (
+                                                <div key={i} className="flex items-start justify-between">
+                                                    {/* Text - Raised, no truncate, wrap allowed */}
+                                                    <span className="text-right font-medium text-lg leading-tight pl-2 flex-grow text-black break-words -translate-y-1">
+                                                        {opt.text || '___________'}
+                                                    </span>
+                                                    
+                                                    {/* Letter */}
+                                                    <span className="font-mono font-bold text-xl text-black shrink-0 w-8 text-center leading-none mt-[2px]">
+                                                        {opt.letter}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="mt-8 text-center border-t-2 border-black pt-6">
+                            <h3 className="text-3xl font-extrabold tracking-widest text-black">כעת זהו אותי בגימטריה!</h3>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+
+        const initialQuestions = Array.from({ length: 10 }, (_, i) => ({
+            id: i + 1,
+            text: '',
+            correctAnswer: '',
+            wrongAnswers: ['', '', ''],
+        }));
+
+        const App = () => {
+            const [questions, setQuestions] = useState(initialQuestions);
+            const [isGenerating, setIsGenerating] = useState(false);
+
+            const handleInputChange = (id, field, value, index) => {
+                setQuestions((prev) =>
+                    prev.map((q) => {
+                        if (q.id !== id) return q;
+                        if (field === 'text') return { ...q, text: value };
+                        if (field === 'correctAnswer') return { ...q, correctAnswer: value };
+                        if (field === 'wrongAnswer' && typeof index === 'number') {
+                            const newWrong = [...q.wrongAnswers];
+                            newWrong[index] = value;
+                            return { ...q, wrongAnswers: newWrong };
+                        }
+                        return q;
+                    })
+                );
+            };
+
+            const handleSaveApp = () => {
+                const htmlContent = document.documentElement.outerHTML;
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'quiz_builder.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const handleDownloadPDF = async () => {
+                setIsGenerating(true);
+                // Reduced timeout to 50ms to be friendlier to mobile popup blockers/async chains
+                setTimeout(async () => {
+                    const input = document.getElementById('print-area');
+                    if (input) {
+                        try {
+                            const canvas = await html2canvas(input, {
+                                scale: 2,
+                                useCORS: true,
+                                backgroundColor: '#ffffff',
+                                logging: false
+                            });
+                            
+                            const imgData = canvas.toDataURL('image/png');
+                            // jsPDF usage with UMD
+                            const { jsPDF } = window.jspdf;
+                            const pdf = new jsPDF('p', 'mm', 'a4');
+                            const pdfWidth = pdf.internal.pageSize.getWidth();
+                            const pdfHeight = pdf.internal.pageSize.getHeight();
+                            const imgWidth = canvas.width;
+                            const imgHeight = canvas.height;
+                            
+                            const finalHeight = (imgHeight * pdfWidth) / imgWidth;
+                            
+                            if (finalHeight > pdfHeight) {
+                                const scaleFactor = pdfHeight / finalHeight;
+                                const scaledWidth = pdfWidth * scaleFactor;
+                                const scaledHeight = finalHeight * scaleFactor;
+                                const marginX = (pdfWidth - scaledWidth) / 2;
+                                pdf.addImage(imgData, 'PNG', marginX, 0, scaledWidth, scaledHeight);
+                            } else {
+                                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, finalHeight);
+                            }
+
+                            pdf.save('quiz-gematria.pdf');
+                        } catch (error) {
+                            console.error("Error generating PDF", error);
+                            alert("אירעה שגיאה ביצירת ה-PDF. נסה שנית.");
+                        } finally {
+                            setIsGenerating(false);
+                        }
+                    }
+                }, 50);
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-20">
+                    {/* Header */}
+                    <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+                        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">מחולל שאלון גימטריה</h1>
+                                <p className="text-sm text-gray-500 hidden sm:block">הזן 10 שאלות, הורד PDF להדפסה</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleSaveApp}
+                                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 transition-all active:scale-95"
+                                    title="שמור את האפליקציה כקובץ HTML למחשב שלך"
+                                >
+                                    <Save size={20} />
+                                    <span className="hidden sm:inline">שמור אפליקציה</span>
+                                </button>
+                                <button
+                                    onClick={handleDownloadPDF}
+                                    disabled={isGenerating}
+                                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold text-white shadow-md transition-all
+                                        ${isGenerating ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 active:scale-95'}`}
+                                >
+                                    {isGenerating ? (
+                                        <span>מייצר...</span>
+                                    ) : (
+                                        <React.Fragment>
+                                            <Download size={20} />
+                                            <span>הורד PDF</span>
+                                        </React.Fragment>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Instructions */}
+                    <div className="max-w-4xl mx-auto px-4 mt-6">
+                        <div className="bg-blue-50 border-r-4 border-blue-500 p-4 rounded-md flex items-start gap-3">
+                            <Info className="text-blue-500 mt-1 shrink-0" />
+                            <div className="text-sm text-blue-900">
+                                <p className="font-bold mb-1">הוראות שימוש:</p>
+                                <ul className="list-disc list-inside space-y-1">
+                                    <li>עבור כל שאלה, הזן את תוכן השאלה.</li>
+                                    <li>בשדה הירוק: הזן את התשובה <strong>הנכונה</strong>.</li>
+                                    <li>בשדות האדומים: הזן את שלוש התשובות <strong>השגויות</strong>.</li>
+                                    <li>בסיום, לחץ על "הורד PDF" ואת הקובץ שתקבל העבר בוואטסאפ לדרור ססובר או אוהד שגב.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Form Content */}
+                    <main className="max-w-4xl mx-auto px-4 mt-8">
+                        {questions.map((q) => (
+                            <QuestionInput
+                                key={q.id}
+                                questionNumber={q.id}
+                                data={q}
+                                onChange={handleInputChange}
+                            />
+                        ))}
+
+                        <div className="text-center py-8">
+                            <p className="text-gray-500 mb-4">סיימת למלא את כל השאלות?</p>
+                            <button
+                                onClick={handleDownloadPDF}
+                                className="inline-flex items-center gap-2 px-8 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-colors"
+                            >
+                                <FileText size={20} />
+                                צור שאלון סופי
+                            </button>
+                        </div>
+                    </main>
+
+                    {/* Hidden Print Area */}
+                    <div className="absolute top-0 left-[-10000px] -z-50">
+                        <div style={{ width: '210mm', minHeight: '297mm' }}>
+                            <PrintPreview id="print-area" questions={questions} />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Render
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+{
+  "name": "Quiz Gematria Builder",
+  "description": "A Hebrew quiz builder that generates a PDF with specific hidden letters for a Gematria puzzle.",
+  "requestFramePermissions": []
+}
