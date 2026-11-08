@@ -63,7 +63,7 @@
 </head>
 <body>
 <main>
-  <h1>💡 הנורות שלי <span style="font-size:12px;color:#666;font-weight:400">גרסה 7</span></h1>
+  <h1>💡 הנורות שלי <span style="font-size:12px;color:#666;font-weight:400">גרסה 8</span></h1>
 
   <div id="nobt" class="warn hidden">הדפדפן הזה לא תומך ב-Bluetooth. פתח את הקישור ב-<b>Chrome</b> באנדרואיד (לא בתוך אפליקציה אחרת), וודא ש-Bluetooth ומיקום דלוקים.</div>
 
@@ -792,7 +792,10 @@ class Bulb {
         showBanner("הנורה " + b.name + " לא ענתה. כבה והדלק אותה מהמתג, חכה 5 שניות, ואז לחץ שוב על \"הוסף נורה\".");
         b.setStatus("idle");
       }
-    } catch (e) { log(b.name + ": " + e.message); b.setStatus("error", e.message); }
+    } catch (e) {
+      log(b.name + ": " + e.message);
+      if (b.stored) { b.setStatus("lost"); b.autoReconnect(); } else b.setStatus("error", e.message);
+    }
   }
   function showBanner(t) { const n = $("nobt"); n.textContent = t; n.classList.remove("hidden"); n.scrollIntoView({ behavior: "smooth" }); }
 
@@ -896,7 +899,7 @@ class Bulb {
       }
     } catch (e) {}
   })();
-  log("ready v7. getDevices=" + !!(bt && bt.getDevices) + "  web-bluetooth=" + !!bt);
+  log("ready v8. getDevices=" + !!(bt && bt.getDevices) + "  web-bluetooth=" + !!bt);
 })();
 
 </script>
