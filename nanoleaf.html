@@ -53,7 +53,7 @@
 </head>
 <body>
 <main>
-  <h1>💡 הנורות שלי</h1>
+  <h1>💡 הנורות שלי <span style="font-size:12px;color:#666;font-weight:400">גרסה 5</span></h1>
 
   <div id="nobt" class="warn hidden">הדפדפן הזה לא תומך ב-Bluetooth. פתח את הקישור ב-<b>Chrome</b> באנדרואיד (לא בתוך אפליקציה אחרת), וודא ש-Bluetooth ומיקום דלוקים.</div>
 
@@ -545,6 +545,28 @@ class Bulb {
     throw lastErr || new Error("pair failed");
   }
 
+  // One pairing attempt with one exact code on a fresh link. The bulb only takes one
+  // attempt per link: after a refusal it rejects everything until the page is reloaded.
+  async pairExact(code, meta) {
+    this.setStatus("pairing");
+    const o = await this.open();
+    const kind = o.order[0];
+    const s = await this.makeSession(o, kind);
+    this.log("pairing via " + kind + " with code " + code.slice(0, 2) + "…(" + code.length + " digits)");
+    try {
+      const r = await s.auth({ code });
+      Store.set(this.key, { proto: kind, token: NL.hex(r.token), clientId: r.clientId ?? null, name: this.name, ...meta });
+      this.session = s;
+      await this.readState();
+      this.setStatus("ready"); this.log("paired ✔");
+      return "ok";
+    } catch (e) {
+      this.log(kind + " pair failed [" + (e.constructor && e.constructor.name) + "/" + e.name + "]: " + e.message);
+      if (e instanceof TooMany) { this.setStatus("error", "הנורה לא מקבלת עוד חיבורים — צריך איפוס"); return "toomany"; }
+      return e instanceof AuthRefused ? "refused" : "error";
+    } finally { if (this.status !== "ready") try { this.device.gatt.disconnect(); } catch (e) {} }
+  }
+
   async autoReconnect() {
     for (let i = 0; i < 5 && this.status !== "ready" && !this.removed; i++) {
       await sleep(2000 * (i + 1));
@@ -673,27 +695,43 @@ class Bulb {
       box.appendChild(x);
     });
   }
+  const tries = () => { try { return JSON.parse(localStorage.getItem("nl-tries") || "{}"); } catch (e) { return {}; } };
+  const setTries = (k, v) => { try { const t = tries(); t[k] = v; localStorage.setItem("nl-tries", JSON.stringify(t)); } catch (e) {} };
+  function candidatesFor(b) {
+    // The bulb's BLE name ends with the ID printed on it (e.g. "Nanoleaf GU10 3F8"): its own code first.
+    const id = ((b.name.match(/([0-9A-F]{3})\s*$/i) || [])[1] || "").toUpperCase();
+    const score = (k) => (k.id === id ? 0 : id && k.id[0] === id[0] ? 1 : 2);
+    const out = [];
+    [...KNOWN].sort((a, c) => score(a) - score(c)).forEach((k) => NL.codeCandidates(k.code).forEach((c) => out.push({ c, k })));
+    return out;
+  }
   async function start(b) {
     try {
       if (await b.connect()) return;
-      // The bulb's BLE name ends with the ID printed on it (e.g. "Nanoleaf GU10 3F8"): try its own code first,
-      // then codes whose first ID digit matches, and the rest last.
-      const id = ((b.name.match(/([0-9A-F]{3})\s*$/i) || [])[1] || "").toUpperCase();
-      const score = (k) => (k.id === id ? 0 : k.id[0] === id[0] ? 1 : 2);
-      const ordered = [...KNOWN].sort((a, c) => score(a) - score(c)).filter((k) => !id || score(k) < 2 || true).map((k) => k.code);
-      for (const code of ordered) {
-        try {
-          log(b.name + ": trying saved code " + code.slice(0, 4) + "…"); await b.pair(code);
-          const k = KNOWN.find((x) => x.code === code); Store.set(b.key, { ...b.stored, code });
-          if (k && !labels()[b.key]) setLabel(b, k.label);
-          render(); return;
-        }
-        catch (e) { if (e instanceof TooMany) throw e; }
+      const list = candidatesFor(b);
+      let idx = tries()[b.key] || 0;
+      if (idx >= list.length) idx = 0;
+      const { c, k } = list[idx];
+      log(b.name + ": attempt " + (idx + 1) + "/" + list.length + " (" + k.label + ")");
+      const r = await b.pairExact(c, { code: k.code });
+      if (r === "ok") {
+        setTries(b.key, 0);
+        if (!labels()[b.key]) setLabel(b, k.label);
+        render(); return;
       }
-      b.setStatus("needcode", "הקודים השמורים לא התאימו");
-      askCode(b);
-    } catch (e) { log(b.name + ": " + e.message); }
+      if (r === "refused") {
+        setTries(b.key, idx + 1);
+        showBanner("הקוד לא התאים לנורה " + b.name + ". הדף ייטען מחדש — אחר כך לחץ שוב על \"הוסף נורה\" ובחר אותה (ניסיון " + (idx + 2) + ").");
+        setTimeout(() => location.reload(), 2500);
+        return;
+      }
+      if (r === "error") {
+        showBanner("הנורה " + b.name + " לא ענתה. כבה והדלק אותה מהמתג, חכה 5 שניות, ואז לחץ שוב על \"הוסף נורה\".");
+        b.setStatus("idle");
+      }
+    } catch (e) { log(b.name + ": " + e.message); b.setStatus("error", e.message); }
   }
+  function showBanner(t) { const n = $("nobt"); n.textContent = t; n.classList.remove("hidden"); n.scrollIntoView({ behavior: "smooth" }); }
 
   const services = [UUID.legacySvc, UUID.v3Svc, UUID.evSvc];
   async function pick(all) {
@@ -784,7 +822,7 @@ class Bulb {
       for (const d of devs) if (saved[d.name || d.id]) { log("restoring " + d.name); addDevice(d); }
     } catch (e) {}
   })();
-  log("ready. web-bluetooth=" + !!bt);
+  log("ready v5. web-bluetooth=" + !!bt);
 })();
 
 </script>
