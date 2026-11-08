@@ -49,16 +49,27 @@
   pre#log { white-space:pre-wrap; direction:ltr; text-align:left; font-size:11px; color:#aab; max-height:240px; overflow:auto; background:#0c0d11; padding:10px; border-radius:10px; }
   ol { padding-inline-start:20px; margin:8px 0; } li { margin:4px 0; }
   .hidden { display:none !important; }
+  .rooms { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+  .room { background:var(--card); border:2px solid var(--line); border-radius:20px; padding:14px; cursor:pointer; }
+  .room.sel { border-color:var(--acc); box-shadow:0 0 0 3px #7cc4ff33; }
+  .room .rn { font-size:20px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .room .rd { width:16px; height:16px; border-radius:50%; flex:none; border:1px solid #fff4; }
+  .room .rs { font-size:13px; color:var(--mut); margin:4px 0 10px; min-height:18px; }
+  .room .pw { width:100%; padding:12px; border-radius:14px; border:0; font:inherit; font-weight:700; cursor:pointer; }
+  .room .pw.on { background:#f6d365; color:#2b2100; } .room .pw.off { background:#2a2f3a; color:var(--txt); }
+  #ctrlTitle { margin:0 0 12px; font-size:17px; }
+  details.card > summary { font-weight:600; color:var(--txt); font-size:15px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>💡 הנורות שלי <span style="font-size:12px;color:#666;font-weight:400">גרסה 6</span></h1>
+  <h1>💡 הנורות שלי <span style="font-size:12px;color:#666;font-weight:400">גרסה 7</span></h1>
 
   <div id="nobt" class="warn hidden">הדפדפן הזה לא תומך ב-Bluetooth. פתח את הקישור ב-<b>Chrome</b> באנדרואיד (לא בתוך אפליקציה אחרת), וודא ש-Bluetooth ומיקום דלוקים.</div>
 
-  <div class="row" id="groups" style="gap:8px;margin-bottom:12px;flex-wrap:wrap"></div>
+  <div class="rooms" id="rooms"></div>
   <section class="card" id="controls">
+    <h3 id="ctrlTitle"></h3>
     <div class="power">
       <button class="btn on" id="bOn">הדלק</button>
       <button class="btn" id="bOff">כבה</button>
@@ -67,13 +78,12 @@
     <div class="sw" id="sw"></div>
     <label class="sl">בהירות <span id="briV"></span><input type="range" id="bri" min="1" max="100" value="80"></label>
     <label class="sl">אור לבן (חם משמאל, קר מימין)<input type="range" id="ct" min="2700" max="6500" step="50" value="3000"></label>
-    <p class="muted" id="ctrlHint" style="margin:10px 0 0">השליטה חלה על כל הנורות המסומנות למטה.</p>
+    <p class="muted" id="ctrlHint" style="margin:10px 0 0"></p>
   </section>
 
-  <section class="card">
-    <div class="row" style="justify-content:space-between;margin-bottom:6px">
-      <b>נורות</b><span class="muted" id="count"></span>
-    </div>
+  <details class="card" id="manage">
+    <summary>ניהול נורות <span class="muted" id="count"></span></summary>
+    <div style="height:8px"></div>
     <div id="list"></div>
     <button class="btn pri wide" id="add" style="margin-top:12px">＋ הוסף נורה</button>
     <button class="btn wide sm" id="addAll" style="margin-top:8px;background:transparent;color:var(--mut)">הנורה לא מופיעה ברשימה? הצג את כל מכשירי ה-Bluetooth</button>
@@ -91,7 +101,7 @@
       <button class="btn sm" id="copyLog" style="margin:8px 0">העתק יומן</button>
       <pre id="log"></pre>
     </details>
-  </section>
+  </details>
 </main>
 
 <dialog id="dlg">
@@ -567,11 +577,17 @@ class Bulb {
     } finally { if (this.status !== "ready") try { this.device.gatt.disconnect(); } catch (e) {} }
   }
 
+  // Keeps trying while the page is open: when the wall switch is turned back on, the bulb reconnects by itself.
   async autoReconnect() {
-    for (let i = 0; i < 5 && this.status !== "ready" && !this.removed; i++) {
-      await sleep(2000 * (i + 1));
-      try { if (await this.connect()) return; } catch (e) {}
-    }
+    if (this.reconnecting) return; this.reconnecting = true;
+    try {
+      for (let i = 0; this.status !== "ready" && !this.removed; i++) {
+        await sleep(i < 5 ? 3000 : 6000);
+        if (document.hidden) continue;
+        try { if (await this.connect()) return; } catch (e) {}
+        if (this.status === "error") this.setStatus("lost");
+      }
+    } finally { this.reconnecting = false; }
   }
 
   async readState() {
@@ -648,9 +664,9 @@ class Bulb {
   const labelOf = (b) => labels()[b.key] || b.name;
   const setLabel = (b, v) => { try { const l = labels(); if (v) l[b.key] = v; else delete l[b.key]; localStorage.setItem("nl-labels", JSON.stringify(l)); } catch (e) {} };
   function render() {
-    renderGroups();
+    renderRooms();
     const list = $("list"); list.innerHTML = "";
-    $("count").textContent = bulbs.length ? bulbs.filter((b) => b.status === "ready").length + "/" + bulbs.length + " מחוברות" : "";
+    $("count").textContent = bulbs.length ? "(" + bulbs.filter((b) => b.status === "ready").length + "/" + bulbs.length + " מחוברות)" : "";
     const ghosts = Object.entries(Store.all()).filter(([k]) => !bulbs.find((b) => b.key === k));
     if (!bulbs.length && !ghosts.length) list.innerHTML = '<p class="muted" style="margin:4px 0">עוד לא הוספת נורות. לחץ על "הוסף נורה" ובחר נורה מהרשימה שתיפתח.</p>';
     // Bulbs paired before: one tap reconnects (the chooser shows only that bulb), no code needed.
@@ -665,13 +681,11 @@ class Bulb {
     bulbs.forEach((b) => {
       const [col, txt] = ST[b.status] || ST.idle;
       const el = document.createElement("div"); el.className = "bulb";
-      el.innerHTML = `<input type="checkbox" class="chk" ${b.selected ? "checked" : ""} title="בשליטה">
-        <div class="ic" style="background:${swatchColor(b)}"></div>
+      el.innerHTML = `<div class="ic" style="background:${swatchColor(b)}"></div>
         <div class="grow"><div class="nm"></div><div class="st"><span style="color:${col}">●</span> ${txt}${b.statusExtra ? " · " + b.statusExtra : ""}</div></div>`;
       const nm = el.querySelector(".nm"); nm.textContent = labelOf(b) + " ✎"; nm.style.cursor = "pointer";
       nm.onclick = () => { const inp = document.createElement("input"); inp.value = labelOf(b); inp.className = "code"; inp.style.cssText = "font-size:16px;padding:6px;letter-spacing:0;text-align:right;direction:rtl";
         nm.replaceWith(inp); inp.focus(); const done = () => { setLabel(b, inp.value.trim()); render(); }; inp.onblur = done; inp.onkeydown = (e) => { if (e.key === "Enter") inp.blur(); }; };
-      el.querySelector(".chk").onchange = (e) => { b.selected = e.target.checked; };
       const actions = document.createElement("div"); actions.className = "row"; actions.style.gap = "6px";
       const mk = (label, fn, cls = "") => { const x = document.createElement("button"); x.className = "btn sm " + cls; x.textContent = label; x.onclick = fn; actions.appendChild(x); };
       if (b.status === "needcode") mk("הזן קוד", () => askCode(b), "pri");
@@ -695,16 +709,55 @@ class Bulb {
   ];
   const KNOWN_CODES = KNOWN.map((k) => k.code);
   const groupOf = (b) => { const st = b.stored; const k = st && KNOWN.find((x) => x.code === st.code); return k ? k.group : null; };
-  let activeGroup = "הכול";
-  function renderGroups() {
-    const box = $("groups"); box.innerHTML = "";
-    const names = ["הכול", ...new Set(KNOWN.map((k) => k.group))];
-    names.forEach((g) => {
-      const x = document.createElement("button"); x.className = "btn sm" + (g === activeGroup ? " pri" : ""); x.textContent = g;
-      x.onclick = () => { activeGroup = g; bulbs.forEach((b) => (b.selected = g === "הכול" || groupOf(b) === g)); render(); };
-      box.appendChild(x);
+  // ----- rooms: each room is one unit of control -----
+  const ROOMS = ["מסדרון", "בודדת"];
+  let activeRoom = (() => { try { return localStorage.getItem("nl-room") || ROOMS[0]; } catch (e) { return ROOMS[0]; } })();
+  const roomOf = (b) => groupOf(b) || "אחרות";
+  const roomNames = () => { const r = [...ROOMS]; if (bulbs.some((b) => roomOf(b) === "אחרות")) r.push("אחרות"); return r; };
+  const savedInRoom = (room) => Object.entries(Store.all()).filter(([, v]) => { const k = KNOWN.find((x) => x.code === v.code); return (k ? k.group : "אחרות") === room; });
+  function renderRooms() {
+    const box = $("rooms"); box.innerHTML = "";
+    roomNames().forEach((room) => {
+      const inRoom = bulbs.filter((b) => roomOf(b) === room);
+      const ready = inRoom.filter((b) => b.status === "ready");
+      const total = Math.max(inRoom.length, savedInRoom(room).length, KNOWN.filter((k) => k.group === room).length);
+      const on = ready.some((b) => b.state && b.state.on);
+      const el = document.createElement("div"); el.className = "room" + (room === activeRoom ? " sel" : "");
+      let status;
+      if (ready.length && ready.length === total) status = on ? "דולק" : "כבוי";
+      else if (ready.length) status = ready.length + " מתוך " + total + " מחוברות";
+      else if (inRoom.some((b) => ["connecting", "lost", "pairing"].includes(b.status))) status = "מתחבר… (המתג דלוק?)";
+      else status = "לא מחובר – לחץ להתחבר";
+      el.innerHTML = '<div class="rn"><span class="rd"></span><span></span></div><div class="rs"></div>';
+      el.querySelector(".rd").style.background = ready[0] ? swatchColor(ready[0]) : "#333";
+      el.querySelector(".rn span:last-child").textContent = room;
+      el.querySelector(".rs").textContent = status;
+      const pw = document.createElement("button");
+      if (ready.length) { pw.className = "pw " + (on ? "off" : "on"); pw.textContent = on ? "כבה" : "הדלק"; pw.onclick = (e) => { e.stopPropagation(); ready.forEach((b) => b.set({ on: !on })); setTimeout(render, 150); }; }
+      else { pw.className = "pw on"; pw.textContent = "התחבר"; pw.onclick = (e) => { e.stopPropagation(); connectRoom(room); }; }
+      el.appendChild(pw);
+      if (ready.length && ready.length < total) {
+        const more = document.createElement("button"); more.className = "btn sm wide"; more.style.marginTop = "8px";
+        more.textContent = "חבר עוד " + (total - ready.length); more.onclick = (e) => { e.stopPropagation(); connectRoom(room); };
+        el.appendChild(more);
+      }
+      el.onclick = () => { activeRoom = room; try { localStorage.setItem("nl-room", room); } catch (e) {} render(); if (!ready.length) connectRoom(room); };
+      box.appendChild(el);
     });
+    const n = bulbs.filter((b) => roomOf(b) === activeRoom && b.status === "ready").length;
+    $("ctrlTitle").textContent = "שליטה: " + activeRoom + (n > 1 ? " (" + n + " נורות יחד)" : "");
+    $("ctrlHint").textContent = n ? "" : "הנורות של " + activeRoom + " לא מחוברות כרגע.";
   }
+  // Opens the chooser listing only this room's bulbs that are not connected yet (one pick per tap).
+  async function connectRoom(room) {
+    if (!bt) return;
+    const connected = new Set(bulbs.filter((b) => b.status === "ready").map((b) => b.key));
+    const names = savedInRoom(room).map(([k, v]) => v.name || k).filter((nm) => !connected.has(nm));
+    if (!names.length) { pick(false); return; }
+    try { const d = await bt.requestDevice({ filters: names.map((name) => ({ name })), optionalServices: services }); log("room pick " + d.name); addDevice(d); }
+    catch (e) { if (e.name !== "NotFoundError") log("chooser: " + e.name + " " + e.message); }
+  }
+
   const tries = () => { try { return JSON.parse(localStorage.getItem("nl-tries") || "{}"); } catch (e) { return {}; } };
   const setTries = (k, v) => { try { const t = tries(); t[k] = v; localStorage.setItem("nl-tries", JSON.stringify(t)); } catch (e) {} };
   function candidatesFor(b) {
@@ -797,9 +850,9 @@ class Bulb {
   };
 
   // ----- controls -----
-  const targets = () => bulbs.filter((b) => b.selected && b.status === "ready");
+  const targets = () => bulbs.filter((b) => roomOf(b) === activeRoom && b.status === "ready");
   const send = (patch) => { const t = targets(); if (!t.length) flashHint(); t.forEach((b) => b.set(patch)); render(); };
-  let hintT; function flashHint() { const h = $("ctrlHint"); h.style.color = "#ffd88a"; h.textContent = bulbs.length ? "אין נורה מחוברת ומסומנת כרגע." : "קודם הוסף נורה למטה."; clearTimeout(hintT); hintT = setTimeout(() => { h.style.color = ""; h.textContent = "השליטה חלה על כל הנורות המסומנות למטה."; }, 2500); }
+  let hintT; function flashHint() { const h = $("ctrlHint"); h.style.color = "#ffd88a"; h.textContent = "הנורות של " + activeRoom + " לא מחוברות – לחץ \"התחבר\" בכרטיס למעלה."; clearTimeout(hintT); hintT = setTimeout(() => { h.style.color = ""; render(); }, 2500); }
 
   $("bOn").onclick = () => send({ on: true });
   $("bOff").onclick = () => send({ on: false });
@@ -843,7 +896,7 @@ class Bulb {
       }
     } catch (e) {}
   })();
-  log("ready v6. getDevices=" + !!(bt && bt.getDevices) + "  web-bluetooth=" + !!bt);
+  log("ready v7. getDevices=" + !!(bt && bt.getDevices) + "  web-bluetooth=" + !!bt);
 })();
 
 </script>
