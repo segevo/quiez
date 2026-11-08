@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#111318">
+<title>הנורות שלי</title>
+<style>
+  :root { --bg:#111318; --card:#1b1e25; --line:#2a2e38; --txt:#eef0f4; --mut:#9aa1ad; --acc:#7cc4ff; --ok:#3ecf8e; --warn:#f5b041; --bad:#ff6b6b; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:16px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif; }
+  main { max-width:520px; margin:0 auto; padding:16px 16px 40px; }
+  h1 { font-size:22px; margin:4px 0 14px; display:flex; align-items:center; gap:8px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:16px; margin-bottom:14px; }
+  .row { display:flex; gap:10px; align-items:center; }
+  .btn { border:0; border-radius:14px; padding:13px 16px; font:inherit; font-weight:600; background:#2a2f3a; color:var(--txt); cursor:pointer; }
+  .btn:active { transform:scale(.98); }
+  .btn.pri { background:var(--acc); color:#0b1520; }
+  .btn.wide { width:100%; }
+  .btn.sm { padding:8px 12px; font-size:14px; border-radius:11px; }
+  .power { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .power .on { background:#f6d365; color:#2b2100; }
+  .wheelwrap { display:flex; justify-content:center; margin:18px 0 8px; }
+  #wheel { position:relative; width:260px; height:260px; border-radius:50%; touch-action:none;
+    background: radial-gradient(circle closest-side, #fff 0%, rgba(255,255,255,0) 100%),
+      conic-gradient(hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%)); }
+  #dot { position:absolute; width:26px; height:26px; margin:-13px 0 0 -13px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 0 1px #0006, 0 2px 6px #0008; pointer-events:none; }
+  .sw { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:14px; }
+  .sw button { height:44px; border-radius:12px; border:2px solid #0000; cursor:pointer; }
+  label.sl { display:block; margin-top:16px; color:var(--mut); font-size:14px; }
+  input[type=range] { width:100%; height:34px; -webkit-appearance:none; appearance:none; background:transparent; direction:ltr; }
+  input[type=range]::-webkit-slider-runnable-track { height:12px; border-radius:6px; background:var(--trk,#333); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:28px; height:28px; margin-top:-8px; border-radius:50%; background:#fff; box-shadow:0 1px 4px #0009; }
+  #bri { --trk:linear-gradient(90deg,#222,#fff); }
+  #ct { --trk:linear-gradient(90deg,#ffb35c,#fff4e0,#cfe3ff); }
+  .bulb { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid var(--line); }
+  .bulb:first-of-type { border-top:0; }
+  .bulb .ic { width:38px; height:38px; border-radius:50%; flex:none; border:2px solid #fff3; }
+  .bulb .nm { font-weight:600; }
+  .bulb .st { font-size:13px; color:var(--mut); }
+  .bulb .grow { flex:1; min-width:0; }
+  .chk { width:24px; height:24px; accent-color:var(--acc); }
+  .muted { color:var(--mut); font-size:14px; }
+  .warn { background:#3a2c10; border:1px solid #6b4e14; color:#ffd88a; border-radius:14px; padding:12px 14px; font-size:14px; margin-bottom:14px; }
+  dialog { border:0; border-radius:20px; background:var(--card); color:var(--txt); width:min(92vw,440px); padding:20px; }
+  dialog::backdrop { background:#000a; }
+  input.code { width:100%; font:20px/1.2 ui-monospace,monospace; letter-spacing:2px; padding:14px; border-radius:12px; border:1px solid var(--line); background:#0e1014; color:var(--txt); direction:ltr; text-align:center; }
+  details { margin-top:10px; } summary { color:var(--mut); font-size:13px; cursor:pointer; }
+  pre#log { white-space:pre-wrap; direction:ltr; text-align:left; font-size:11px; color:#aab; max-height:240px; overflow:auto; background:#0c0d11; padding:10px; border-radius:10px; }
+  ol { padding-inline-start:20px; margin:8px 0; } li { margin:4px 0; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>💡 הנורות שלי</h1>
+
+  <div id="nobt" class="warn hidden">הדפדפן הזה לא תומך ב-Bluetooth. פתח את הקישור ב-<b>Chrome</b> באנדרואיד (לא בתוך אפליקציה אחרת), וודא ש-Bluetooth ומיקום דלוקים.</div>
+
+  <div class="row" id="groups" style="gap:8px;margin-bottom:12px;flex-wrap:wrap"></div>
+  <section class="card" id="controls">
+    <div class="power">
+      <button class="btn on" id="bOn">הדלק</button>
+      <button class="btn" id="bOff">כבה</button>
+    </div>
+    <div class="wheelwrap"><div id="wheel"><div id="dot" style="left:130px;top:130px"></div></div></div>
+    <div class="sw" id="sw"></div>
+    <label class="sl">בהירות <span id="briV"></span><input type="range" id="bri" min="1" max="100" value="80"></label>
+    <label class="sl">אור לבן (חם משמאל, קר מימין)<input type="range" id="ct" min="2700" max="6500" step="50" value="3000"></label>
+    <p class="muted" id="ctrlHint" style="margin:10px 0 0">השליטה חלה על כל הנורות המסומנות למטה.</p>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:6px">
+      <b>נורות</b><span class="muted" id="count"></span>
+    </div>
+    <div id="list"></div>
+    <button class="btn pri wide" id="add" style="margin-top:12px">＋ הוסף נורה</button>
+    <button class="btn wide sm" id="addAll" style="margin-top:8px;background:transparent;color:var(--mut)">הנורה לא מופיעה ברשימה? הצג את כל מכשירי ה-Bluetooth</button>
+    <details>
+      <summary>לפני שמתחילים</summary>
+      <ol class="muted">
+        <li>סגור לגמרי את אפליקציית Nanoleaf (הגדרות ← אפליקציות ← Nanoleaf ← עצירה בכפייה). כשהיא מחוברת לנורה, הנורה לא נראית לאחרים.</li>
+        <li>עמוד קרוב לנורות (עד כמה מטרים), עם Bluetooth ומיקום דלוקים.</li>
+        <li>בפעם הראשונה כל נורה תבקש את קוד ההתאמה שלה – הקוד שמודפס על הנורה או על הכרטיס שבקופסה (QR או 11 ספרות). אחר כך זה נשמר.</li>
+        <li>החיבור עובד רק כשהדף פתוח, כמו האפליקציה המקורית בלי רכזת.</li>
+      </ol>
+    </details>
+    <details>
+      <summary>יומן טכני</summary>
+      <button class="btn sm" id="copyLog" style="margin:8px 0">העתק יומן</button>
+      <pre id="log"></pre>
+    </details>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <h3 style="margin:0 0 6px">קוד ההתאמה של <span id="dName"></span></h3>
+  <p class="muted" style="margin:0 0 12px">הקוד מודפס על הנורה עצמה או על הכרטיס שבקופסה: מספר של 11 ספרות (למשל <span dir="ltr">3497-011-2332</span>) או 8 ספרות. אפשר גם לצלם את ה-QR.</p>
+  <input class="code" id="dCode" inputmode="numeric" autocomplete="off" placeholder="00000000000">
+  <input type="file" id="dFile" accept="image/*" capture="environment" class="hidden">
+  <button class="btn wide sm" id="dScan" style="margin-top:10px">📷 צלם את ה-QR</button>
+  <p class="muted" id="dMsg" style="min-height:20px;margin:10px 0"></p>
+  <div class="row">
+    <button class="btn pri" id="dOk" style="flex:1">חבר</button>
+    <button class="btn" id="dCancel">ביטול</button>
+  </div>
+</dialog>
+
+<script>
+// ===== Nanoleaf Essentials BLE core (protocol ported from jorgediez/ha-nanoleaf-ble, MIT) =====
+const NL = (() => {
+  const subtle = globalThis.crypto.subtle;
+  const te = new TextEncoder();
+
+  // ---------- bytes helpers ----------
+  const cat = (...a) => { const n = a.reduce((s, x) => s + x.length, 0); const o = new Uint8Array(n); let i = 0; for (const x of a) { o.set(x, i); i += x.length; } return o; };
+  const hex = (b) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  const unhex = (h) => new Uint8Array(h.match(/../g).map((x) => parseInt(x, 16)));
+  const u16 = (v) => new Uint8Array([(v >> 8) & 255, v & 255]);
+  const rd16 = (b, o = 0) => (b[o] << 8) | b[o + 1];
+  const rd32 = (b, o = 0) => ((b[o] << 24) >>> 0) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3];
+  const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const rnd = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
+  const toU8 = (dv) => new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice();
+
+  const sha = async (alg, ...parts) => new Uint8Array(await subtle.digest(alg, cat(...parts)));
+  const sha1 = (...p) => sha("SHA-1", ...p);
+  const sha256 = (...p) => sha("SHA-256", ...p);
+
+  // ---------- BigInt ----------
+  const bnFromBE = (b) => b.length ? BigInt("0x" + hex(b)) : 0n;
+  const bnFromLE = (b) => bnFromBE(Uint8Array.from(b).reverse());
+  const bnToBE = (v) => { let h = v.toString(16); if (h.length % 2) h = "0" + h; return unhex(h); }; // minimal, >=1 byte
+  const bnToLE = (v, n) => { const o = new Uint8Array(n); for (let i = 0; i < n; i++) { o[i] = Number(v & 255n); v >>= 8n; } return o; };
+  const mod = (a, m) => ((a % m) + m) % m;
+  const modpow = (b, e, m) => { let r = 1n; b = mod(b, m); while (e > 0n) { if (e & 1n) r = (r * b) % m; b = (b * b) % m; e >>= 1n; } return r; };
+
+  // ---------- X25519 (RFC 7748) ----------
+  const P25519 = (1n << 255n) - 19n;
+  function x25519(kBytes, uBytes) {
+    const k = Uint8Array.from(kBytes); k[0] &= 248; k[31] &= 127; k[31] |= 64;
+    const u8 = Uint8Array.from(uBytes); u8[31] &= 127;
+    const kk = bnFromLE(k), x1 = bnFromLE(u8) % P25519, p = P25519;
+    let x2 = 1n, z2 = 0n, x3 = x1, z3 = 1n, swap = 0n;
+    for (let t = 254n; t >= 0n; t--) {
+      const kt = (kk >> t) & 1n; swap ^= kt;
+      if (swap) { [x2, x3] = [x3, x2]; [z2, z3] = [z3, z2]; }
+      swap = kt;
+      const A = (x2 + z2) % p, AA = (A * A) % p, B = mod(x2 - z2, p), BB = (B * B) % p, E = mod(AA - BB, p);
+      const C = (x3 + z3) % p, D = mod(x3 - z3, p), DA = (D * A) % p, CB = (C * B) % p;
+      x3 = ((DA + CB) % p) ** 2n % p; z3 = (x1 * (mod(DA - CB, p) ** 2n % p)) % p;
+      x2 = (AA * BB) % p; z2 = (E * ((AA + 121665n * E) % p)) % p;
+    }
+    if (swap) { [x2, x3] = [x3, x2]; [z2, z3] = [z3, z2]; }
+    return bnToLE((x2 * modpow(z2, p - 2n, p)) % p, 32);
+  }
+  const X25519_BASE = (() => { const b = new Uint8Array(32); b[0] = 9; return b; })();
+
+  // ---------- AES ----------
+  async function aesKeys(raw) {
+    return {
+      ctr: await subtle.importKey("raw", raw, "AES-CTR", false, ["encrypt"]),
+      cbc: await subtle.importKey("raw", raw, "AES-CBC", false, ["encrypt"]),
+    };
+  }
+  const ctrRaw = async (key, counter, data, lenBits = 128) =>
+    new Uint8Array(await subtle.encrypt({ name: "AES-CTR", counter, length: lenBits }, key, data));
+
+  // One AES-CTR keystream consumed by both directions.
+  class SharedCTR {
+    static async create(rawKey, iv16) { const s = new SharedCTR(); s.key = (await aesKeys(rawKey)).ctr; s.block = bnFromBE(iv16); s.left = new Uint8Array(0); return s; }
+    async xor(data) {
+      const need = data.length - this.left.length;
+      if (need > 0) {
+        const nb = Math.ceil(need / 16);
+        const cb = new Uint8Array(16); let v = this.block; for (let i = 15; i >= 0; i--) { cb[i] = Number(v & 255n); v >>= 8n; }
+        const ks = await ctrRaw(this.key, cb, new Uint8Array(nb * 16));
+        this.block = (this.block + BigInt(nb)) & ((1n << 128n) - 1n);
+        this.left = cat(this.left, ks);
+      }
+      const out = data.map((x, i) => x ^ this.left[i]);
+      this.left = this.left.slice(data.length);
+      return out;
+    }
+  }
+
+  // AES-128-CCM, tag 4, no AAD
+  async function ccm(keys, nonce, data, decrypt, tagLen = 4) {
+    const L = 15 - nonce.length;
+    const a0 = cat(new Uint8Array([L - 1]), nonce, new Uint8Array(L));
+    const body = decrypt ? data.slice(0, data.length - tagLen) : data;
+    const tagIn = decrypt ? data.slice(data.length - tagLen) : null;
+    const s = await ctrRaw(keys.ctr, a0, cat(new Uint8Array(16), body), L * 8);
+    const s0 = s.slice(0, 16), out = s.slice(16);
+    const plain = decrypt ? out : data;
+    const lenB = new Uint8Array(L); let n = plain.length; for (let i = L - 1; i >= 0; i--) { lenB[i] = n & 255; n = Math.floor(n / 256); }
+    const b0 = cat(new Uint8Array([(((tagLen - 2) / 2) << 3) | (L - 1)]), nonce, lenB);
+    const pad = (16 - (plain.length % 16)) % 16;
+    const macIn = cat(b0, plain, new Uint8Array(pad));
+    const cbc = new Uint8Array(await subtle.encrypt({ name: "AES-CBC", iv: new Uint8Array(16) }, keys.cbc, macIn));
+    const T = cbc.slice(macIn.length - 16, macIn.length - 16 + tagLen);
+    const tag = T.map((x, i) => x ^ s0[i]);
+    if (decrypt) { if (!eq(tag, tagIn)) throw new Error("CCM tag mismatch"); return out; }
+    return cat(out, tag);
+  }
+
+  function crc16(data) {
+    let c = 0;
+    for (const b of data) { c ^= b << 8; for (let i = 0; i < 8; i++) c = (c & 0x8000 ? (c << 1) ^ 0x1021 : c << 1) & 0xffff; }
+    return u16(c);
+  }
+
+  // ---------- LTPDU commands ----------
+  const M = { GET: 0, POST: 1, PUT: 2, DELETE: 3 };
+  function encCmd(ep, value, method) {
+    const n = te.encode(ep);
+    const parts = [u16(1), u16(n.length), n];
+    if (method != null) parts.push(u16(4), u16(1), new Uint8Array([method]));
+    if (value != null) parts.push(u16(2), u16(value.length), value);
+    return cat(...parts);
+  }
+  function decResp(d) {
+    const res = {}; let ep = null, frag = null, fst = 0, o = 0;
+    while (o + 4 <= d.length) {
+      const t = rd16(d, o), l = rd16(d, o + 2), v = d.slice(o + 4, o + 4 + l); o += 4 + l;
+      if (t === 1) { ep = new TextDecoder().decode(v); frag = null; }
+      else if (ep == null) continue;
+      else if (t === 3 && v.length) res[ep] = [v[0], v.slice(1)];
+      else if (t === 6 && v.length) { fst = v[0]; frag = new Uint8Array(0); res[ep] = [fst, frag]; }
+      else if (t === 7 && frag) { frag = cat(frag, v); res[ep] = [fst, frag]; }
+    }
+    return res;
+  }
+
+  // ---------- SRP-6a (Nanoleaf flavour) ----------
+  const N512 = BigInt("0xD66AAFE8E245F9AC245A199F62CE61AB8FA90A4D80C71CD2ADFD0B9DA163B29F2A34AFBDB3B1B5D0102559CE63D8B6E86B0AA59C14E79D4AA62D1748E4249DF3");
+  const N2048 = BigInt("0xAC6BDB41324A9A9BF166DE5E1389582FAF72B6651987EE07FC3192943DB56050A37329CBB4A099ED8193E0757767A13DD52312AB4B03310DCD7F48A9DA04FD50E8083969EDB767B0CF6095179A163AB3661A05FBD5FAAAE82918A9962F0B93B855F97993EC975EEAA80D740ADBF4FF747359D041D5C33EA71D281E446B14773BCA97B43A23FB801676BD207A436C6481F1D2B9078717461A5B9D32E688F87748544523B524B0D57D5EA77A2775D2ECFA032CFBDBF52FB3786160279004E57AE6AF874E7303CE53299CCC041C7BC308D82A5698F3A8D0C38271AE35F8E9DBFBB694B5C803D89F7AE435DE236D525F54759B65E372FCD68EF20FA7111F9E4AFF73");
+  const G = 2n;
+  class SRP {
+    constructor(username, password, N, aOverride) {
+      this.I = te.encode(username); this.P = password; this.N = N;
+      const bits = N.toString(2).length;
+      this.a = aOverride ?? (bnFromBE(rnd(Math.ceil(bits / 8))) & ((1n << BigInt(bits)) - 1n));
+      this.A = modpow(G, this.a, N);
+    }
+    async challenge(salt, Bbytes) {
+      const N = this.N, s = bnFromBE(salt), B = bnFromBE(Bbytes), A = this.A;
+      const u = bnFromBE(await sha256(bnToBE(A), bnToBE(B)));
+      const x = bnFromBE(await sha256(bnToBE(s), await sha256(this.I, te.encode(":"), this.P)));
+      const k = bnFromBE(await sha256(bnToBE(N), bnToBE(G)));
+      const S = modpow(mod(B - k * modpow(G, x, N), N), this.a + u * x, N);
+      this.K = await sha256(bnToBE(S));
+      const hN = await sha256(bnToBE(N)), hg = await sha256(bnToBE(G));
+      const nx = hN.map((v, i) => v ^ hg[i]);
+      this.M1 = await sha256(nx, await sha256(this.I), bnToBE(s), bnToBE(A), bnToBE(B), this.K);
+      this.SK = await sha256(this.K);
+      return this.M1;
+    }
+  }
+
+  class V3Cipher {
+    static async create(version, sk) {
+      const c = new V3Cipher(); c.version = version; c.iv = sk.slice(16, 24); c.counter = 0n;
+      if (version === "3.0") c.ctr = await SharedCTR.create(sk.slice(0, 16), cat(new Uint8Array(8), c.iv));
+      else c.keys = await aesKeys(sk.slice(0, 16));
+      return c;
+    }
+    nonce() {
+      const b = new Uint8Array(8); let v = this.counter; for (let i = 7; i >= 0; i--) { b[i] = Number(v & 255n); v >>= 8n; }
+      this.counter++;
+      return cat(this.version === "3.1" ? b.slice(3) : b.slice(4), this.iv);
+    }
+    async encrypt(p) { return this.ctr ? this.ctr.xor(cat(p, crc16(p))) : ccm(this.keys, this.nonce(), p, false); }
+    async decrypt(c) { if (this.ctr) { const p = await this.ctr.xor(c); return p.slice(0, -2); } return ccm(this.keys, this.nonce(), c, true); }
+  }
+
+  const authTLVs = (items) => cat(...items.sort((a, b) => a[0] - b[0]).map(([t, v]) => cat(new Uint8Array([t]), u16(v.length), v)));
+  function parseAuth(d) { const o = {}; let i = 0; while (i + 3 <= d.length) { const t = d[i], l = rd16(d, i + 1); o[t] = d.slice(i + 3, i + 3 + l); i += 3 + l; } return o; }
+
+  // ---------- Matter / setup code ----------
+  const B38 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-.";
+  function qrPasscode(qr) {
+    const s = qr.trim().toUpperCase().replace(/^MT:/, "");
+    const bytes = [];
+    for (let i = 0; i < s.length; i += 5) {
+      const ch = s.slice(i, i + 5), nb = ch.length === 5 ? 3 : ch.length === 4 ? 2 : 1;
+      let v = 0; for (let j = ch.length - 1; j >= 0; j--) { const d = B38.indexOf(ch[j]); if (d < 0) throw new Error("bad QR"); v = v * 38 + d; }
+      for (let j = 0; j < nb; j++) { bytes.push(v & 255); v = Math.floor(v / 256); }
+    }
+    const big = bnFromLE(Uint8Array.from(bytes));
+    return Number((big >> 57n) & ((1n << 27n) - 1n));
+  }
+  function manualPasscode(d) {
+    const c2 = parseInt(d.slice(1, 6), 10), c3 = parseInt(d.slice(6, 10), 10);
+    return (c3 << 14) | (c2 & 0x3fff);
+  }
+  // Returns candidate codes to try, most likely first.
+  function codeCandidates(input) {
+    const raw = (input || "").trim();
+    if (/^MT:/i.test(raw)) return [String(qrPasscode(raw)).padStart(8, "0")];
+    const d = raw.replace(/\D/g, "");
+    if (d.length === 8) return [d];
+    if (d.length === 11 || d.length === 21) return [String(manualPasscode(d)).padStart(8, "0"), d];
+    if (d.length) return [d];
+    return [];
+  }
+
+  return { cat, hex, unhex, u16, rd16, rd32, eq, rnd, toU8, sha1, sha256, x25519, X25519_BASE, SharedCTR, aesKeys, ccm, crc16, M, encCmd, decResp, SRP, N512, N2048, V3Cipher, authTLVs, parseAuth, qrPasscode, manualPasscode, codeCandidates, bnFromBE, bnToBE };
+})();
+
+
+// ===== Web Bluetooth sessions + bulb model =====
+const UUID = {
+  legacySvc: "6d2ae1c4-9aea-11ea-bb37-0242ac130002",
+  setup: "6d2adfda-9aea-11ea-bb37-0242ac130002",
+  enc: "6d2adda0-9aea-11ea-bb37-0242ac130002",
+  pub: "a9e0a2de-9aea-11ea-bb37-0242ac130002",
+  v3Svc: "a1000000-183a-7e69-41ee-b6872df15ca3",
+  v3Write: "a1c10000-8a2f-84c9-1562-f8ac7b913ed4",
+  v3Ind: "a1c20000-c78e-15fc-429b-57e13ca8d26f",
+  evSvc: "a2000000-1eaf-3078-5ec6-6ae8239f4db7",
+  ev: "a2c10000-a414-bf52-80e5-3b6da1479cf2",
+};
+const V2_KEY_SALT = NL.unhex("bca9e39738e2611c25d243c985d3c592ccbee330e077b89d7978f5fc785cb5e8");
+const V2_IV_SALT = NL.unhex("41e2e9eb5e5fa56e800e346d8c2b600742eb49839626faecdc37fb94a3a3c202");
+
+class AuthRefused extends Error {}
+class TooMany extends Error {}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const withTimeout = (p, ms, what) => Promise.race([p, sleep(ms).then(() => { throw new Error(what + ": timeout"); })]);
+
+// ---------- legacy (firmware < 5) ----------
+class LegacySession {
+  constructor(svc) { this.svc = svc; this.kind = "legacy"; }
+  async init() {
+    this.cSetup = await this.svc.getCharacteristic(UUID.setup);
+    this.cEnc = await this.svc.getCharacteristic(UUID.enc);
+    try { this.cPub = await this.svc.getCharacteristic(UUID.pub); } catch (e) {}
+  }
+  async write(c, d) { await withTimeout(c.writeValueWithResponse ? c.writeValueWithResponse(d) : c.writeValue(d), 8000, "write"); }
+  async read(c) { return NL.toU8(await withTimeout(c.readValue(), 8000, "read")); }
+  async identify() {
+    if (!this.cPub) return;
+    await this.write(this.cPub, NL.encCmd("lb/0/id", new Uint8Array([1]), NL.M.POST));
+    try { await this.read(this.cPub); } catch (e) {}
+  }
+  async auth({ code, token }) {
+    const priv = NL.rnd(32);
+    await this.write(this.cSetup, NL.x25519(priv, NL.X25519_BASE));
+    const dev = await this.read(this.cSetup);
+    if (dev.length < 32) throw new Error("device key " + dev.length + "B");
+    const shared = NL.x25519(priv, dev.slice(0, 32));
+    const key = (await NL.sha1(V2_KEY_SALT, shared)).slice(0, 16);
+    const iv = (await NL.sha1(V2_IV_SALT, shared)).slice(0, 16);
+    this.stream = await NL.SharedCTR.create(key, iv);
+    let msg;
+    if (token) msg = NL.cat(new Uint8Array([2, token.length]), token);
+    else { const s = new TextEncoder().encode(code); msg = NL.cat(new Uint8Array([3, s.length]), s); }
+    let reply;
+    try {
+      await this.write(this.cSetup, await this.stream.xor(msg));
+      reply = await this.stream.xor(await this.read(this.cSetup));
+    } catch (e) {
+      throw new AuthRefused("refused (" + e.message + ")");
+    }
+    if (reply.length === 1 && reply[0] === 0x86) throw new TooMany("no more pairings");
+    if (token) return { token };
+    if (!reply.length) throw new AuthRefused("empty reply");
+    return { token: reply };
+  }
+  async request(method, cmds) {
+    const body = NL.cat(...cmds.map(([ep, v]) => NL.encCmd(ep, v, method)));
+    await this.write(this.cEnc, await this.stream.xor(body));
+    return NL.decResp(await this.stream.xor(await this.read(this.cEnc)));
+  }
+}
+
+// ---------- LTPDUv3 (firmware >= 5) ----------
+class V3Session {
+  constructor(svc, username) { this.svc = svc; this.username = username; this.kind = "v3"; this.clientId = 0xffff; this.pending = new Map(); }
+  async init() {
+    this.cW = await this.svc.getCharacteristic(UUID.v3Write);
+    this.cI = await this.svc.getCharacteristic(UUID.v3Ind);
+    this.cI.addEventListener("characteristicvaluechanged", (ev) => this.onInd(NL.toU8(ev.target.value)));
+    await this.cI.startNotifications();
+  }
+  async initEvents(server) {
+    try { const s = await server.getPrimaryService(UUID.evSvc); const c = await s.getCharacteristic(UUID.ev); await c.startNotifications(); } catch (e) {}
+  }
+  onInd(d) {
+    if (d.length < 6) return;
+    const kind = d[1], id = NL.rd16(d, 2), cid = NL.rd16(d, 4);
+    if (kind !== 2 || d.length < 12) return;
+    const p = this.pending.get(id);
+    if (p) { this.pending.delete(id); p({ clientId: cid, code: NL.rd16(d, 6), data: d.slice(12) }); }
+  }
+  async call(uri, data) {
+    const id = NL.rd16(NL.rnd(2));
+    const len = data.length;
+    const frame = NL.cat(new Uint8Array([1, 1]), NL.u16(id), NL.u16(this.clientId), new Uint8Array([uri, 1, (len >>> 24) & 255, (len >> 16) & 255, (len >> 8) & 255, len & 255]), data);
+    const pr = new Promise((res) => this.pending.set(id, res));
+    try {
+      await withTimeout(this.cW.writeValueWithResponse ? this.cW.writeValueWithResponse(frame) : this.cW.writeValue(frame), 8000, "write");
+      return await withTimeout(pr, 10000, "reply");
+    } finally { this.pending.delete(id); }
+  }
+  async identify() { await this.call(4, new Uint8Array(0)); }
+  checkAuth(r, step) {
+    if (r.code === 3) throw new AuthRefused(step + ": unauthorised");
+    if (r.code !== 0) throw new Error(step + ": code " + r.code);
+    const t = NL.parseAuth(r.data);
+    if (t[0xf0]) throw new AuthRefused(step + ": device error " + NL.hex(t[0xf0]));
+    return t;
+  }
+  async auth({ code, token, clientId }) {
+    let pw, type;
+    if (token) { pw = token; type = 2; this.clientId = clientId; }
+    else { pw = Uint8Array.from(code.split("").map(Number)); type = 1; this.clientId = 0xffff; }
+    const srp = new NL.SRP(this.username, pw, NL.N512);
+    let r = await this.call(1, NL.authTLVs([[1, new Uint8Array([type])], [3, NL.bnToBE(srp.A)], [7, new Uint8Array([2])]]));
+    let t = this.checkAuth(r, "step1");
+    if (this.clientId === 0xffff) this.clientId = r.clientId;
+    if (!t[2] || !t[3]) throw new Error("step1: no salt/B");
+    const ver = t[0x11] ? t[0x11][0] + "." + t[0x11][1] : "3.0";
+    const m1 = await srp.challenge(t[2], t[3]);
+    r = await this.call(1, NL.authTLVs([[4, m1]]));
+    this.checkAuth(r, "step2");
+    this.cipher = await NL.V3Cipher.create(ver, srp.SK);
+    if (token) return { token, clientId: this.clientId };
+    r = await this.call(1, await this.cipher.encrypt(NL.authTLVs([[5, new Uint8Array(0)]])));
+    t = NL.parseAuth(await this.cipher.decrypt(r.data));
+    if (!t[6]) throw new Error("step3: no token");
+    return { token: t[6], clientId: this.clientId };
+  }
+  async request(method, cmds) {
+    const body = NL.cat(...cmds.map(([ep, v]) => NL.encCmd(ep, v, method)));
+    const r = await this.call(2, await this.cipher.encrypt(body));
+    if (r.code !== 0) throw new Error("LTPDU code " + r.code);
+    return NL.decResp(await this.cipher.decrypt(r.data));
+  }
+}
+
+// ---------- storage ----------
+const Store = {
+  all() { try { return JSON.parse(localStorage.getItem("nl-bulbs") || "{}"); } catch (e) { return {}; } },
+  get(k) { return this.all()[k]; },
+  set(k, v) { try { const a = this.all(); a[k] = v; localStorage.setItem("nl-bulbs", JSON.stringify(a)); } catch (e) {} },
+  del(k) { try { const a = this.all(); delete a[k]; localStorage.setItem("nl-bulbs", JSON.stringify(a)); } catch (e) {} },
+};
+
+// ---------- bulb ----------
+class Bulb {
+  constructor(device, log, onChange) {
+    this.device = device; this.name = device.name || "Nanoleaf"; this.key = device.name || device.id;
+    this.log = (m) => log(this.name + ": " + m); this.onChange = onChange;
+    this.status = "idle"; this.selected = true; this.state = {}; this.want = {}; this.busy = false; this.session = null;
+    device.addEventListener("gattserverdisconnected", () => { this.session = null; if (this.status === "ready") { this.setStatus("lost"); this.autoReconnect(); } });
+  }
+  setStatus(s, extra) { this.status = s; this.statusExtra = extra || ""; this.onChange(); }
+  get stored() { return Store.get(this.key); }
+
+  async open() {
+    if (this.device.gatt.connected) { try { this.device.gatt.disconnect(); } catch (e) {} await sleep(300); }
+    let server, lastErr;
+    for (let i = 0; i < 3; i++) {
+      try { server = await withTimeout(this.device.gatt.connect(), 15000, "connect"); break; }
+      catch (e) { lastErr = e; this.log("connect try " + (i + 1) + ": " + e.message); await sleep(1500); }
+    }
+    if (!server) throw lastErr;
+    this.server = server;
+    let v3svc = null, legSvc = null;
+    try { v3svc = await server.getPrimaryService(UUID.v3Svc); } catch (e) {}
+    try { legSvc = await server.getPrimaryService(UUID.legacySvc); } catch (e) {}
+    this.log("services: v3=" + !!v3svc + " legacy=" + !!legSvc);
+    const pref = this.stored && this.stored.proto;
+    const order = [];
+    if (pref === "legacy" && legSvc) order.push("legacy");
+    if (v3svc) order.push("v3");
+    if (legSvc && !order.includes("legacy")) order.push("legacy");
+    if (!order.length) throw new Error("לא נמצא שירות Nanoleaf בנורה");
+    return { server, v3svc, legSvc, order };
+  }
+  async makeSession(o, kind) {
+    const s = kind === "v3" ? new V3Session(o.v3svc, this.name) : new LegacySession(o.legSvc);
+    await s.init(); if (kind === "v3") await s.initEvents(o.server);
+    return s;
+  }
+
+  // connect with stored token; returns false if a code is needed
+  async connect() {
+    const st = this.stored;
+    if (!st) { this.setStatus("needcode"); return false; }
+    this.setStatus("connecting");
+    try {
+      const o = await this.open();
+      const s = await this.makeSession(o, o.order.includes(st.proto) ? st.proto : o.order[0]);
+      await s.auth({ token: NL.unhex(st.token), clientId: st.clientId });
+      this.session = s;
+      await this.readState();
+      this.setStatus("ready");
+      this.log("connected (" + s.kind + ")");
+      return true;
+    } catch (e) {
+      this.log("login failed: " + e.message);
+      if (e instanceof AuthRefused) { this.setStatus("needcode", "הנורה לא זיהתה את החיבור השמור — נסה שוב או הזן קוד"); return false; }
+      this.setStatus("error", e.message); throw e;
+    }
+  }
+
+  async pair(input) {
+    const cands = NL.codeCandidates(input);
+    if (!cands.length) throw new Error("לא הוזן קוד");
+    this.setStatus("pairing");
+    let lastErr;
+    for (const code of cands) {
+      let o;
+      try { o = await this.open(); } catch (e) { this.setStatus("error", e.message); throw e; }
+      for (const kind of o.order) {
+        try {
+          const s = await this.makeSession(o, kind);
+          this.log("pairing via " + kind + " with code " + code.slice(0, 2) + "…");
+          const r = await s.auth({ code });
+          Store.set(this.key, { proto: kind, token: NL.hex(r.token), clientId: r.clientId ?? null, name: this.name });
+          this.session = s;
+          await this.readState();
+          this.setStatus("ready"); this.log("paired ✔");
+          return;
+        } catch (e) {
+          lastErr = e; this.log(kind + " pair failed: " + e.message);
+          if (e instanceof TooMany) { this.setStatus("error", "הנורה לא מקבלת עוד חיבורים — צריך איפוס"); throw e; }
+          o = await this.open().catch(() => o); // fresh link before next attempt
+        }
+      }
+    }
+    this.setStatus("needcode", "הקוד לא התקבל");
+    throw lastErr || new Error("pair failed");
+  }
+
+  async autoReconnect() {
+    for (let i = 0; i < 5 && this.status !== "ready" && !this.removed; i++) {
+      await sleep(2000 * (i + 1));
+      try { if (await this.connect()) return; } catch (e) {}
+    }
+  }
+
+  async readState() {
+    try {
+      const r = await this.session.request(NL.M.GET, [["lb/0/oo"], ["lb/0/pb"], ["lb/0/hu"], ["lb/0/sa"], ["lb/0/ct"]]);
+      const g = (k) => (r[k] && r[k][0] === 0 && r[k][1].length ? r[k][1] : null);
+      const v16 = (b) => (b && b.length >= 2 ? NL.rd16(b) : b ? b[0] : null);
+      this.state = { on: g("lb/0/oo") ? g("lb/0/oo")[0] === 1 : null, bri: v16(g("lb/0/pb")), hue: v16(g("lb/0/hu")), sat: v16(g("lb/0/sa")), ct: v16(g("lb/0/ct")) };
+      this.log("state " + JSON.stringify(this.state));
+    } catch (e) { this.log("read state failed: " + e.message); }
+  }
+
+  set(patch) { Object.assign(this.want, patch); this.flush(); }
+  async flush() {
+    if (this.busy || !this.session || this.status !== "ready") return;
+    this.busy = true;
+    try {
+      while (Object.keys(this.want).length) {
+        const w = this.want; this.want = {};
+        const c = [];
+        if (w.on === false) c.push(["lb/0/oo", new Uint8Array([0])]);
+        else {
+          if (w.on || w.hue != null || w.ct != null || w.bri != null) c.push(["lb/0/oo", new Uint8Array([1])]);
+          if (w.ct != null) c.push(["lb/0/ct", NL.u16(Math.round(w.ct))]);
+          if (w.hue != null) c.push(["lb/0/hu", NL.u16(Math.round(w.hue) % 360)], ["lb/0/sa", NL.u16(Math.round(w.sat))]);
+          if (w.bri != null) c.push(["lb/0/pb", NL.u16(Math.max(1, Math.round(w.bri)))]);
+        }
+        const r = await this.session.request(NL.M.PUT, c);
+        const bad = Object.entries(r).filter(([, v]) => v[0] !== 0);
+        if (bad.length) this.log("status " + bad.map(([k, v]) => k + "=" + v[0]).join(","));
+        Object.assign(this.state, w.on === false ? { on: false } : { on: true, ...w });
+      }
+    } catch (e) {
+      this.log("send failed: " + e.message);
+      this.session = null; this.setStatus("lost"); this.autoReconnect();
+    } finally { this.busy = false; }
+  }
+  async blink() {
+    try {
+      if (this.session && this.session.kind === "legacy") { await this.session.request(NL.M.PUT, [["lb/0/id", new Uint8Array([1])]]); return; }
+      if (this.session) { await this.session.request(NL.M.PUT, [["lb/0/id", new Uint8Array([1])]]); return; }
+      const o = await this.open(); const s = await this.makeSession(o, o.order[0]); await s.identify();
+    } catch (e) { this.log("blink failed: " + e.message); }
+  }
+  forget() { this.removed = true; Store.del(this.key); try { this.device.gatt.disconnect(); } catch (e) {} }
+}
+
+// ===== UI =====
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const logEl = $("log");
+  const log = (m) => { const t = new Date().toTimeString().slice(0, 8); logEl.textContent += t + " " + m + "\n"; logEl.scrollTop = 1e9; };
+  const bulbs = [];
+  const bt = navigator.bluetooth;
+  if (!bt) $("nobt").classList.remove("hidden");
+
+  const ST = {
+    idle: ["#666", "ממתין"], connecting: ["#f5b041", "מתחבר…"], pairing: ["#f5b041", "מתאים…"], ready: ["#3ecf8e", "מחובר"],
+    lost: ["#f5b041", "החיבור נפל – מתחבר מחדש…"], needcode: ["#7cc4ff", "צריך קוד התאמה"], error: ["#ff6b6b", "שגיאה"],
+  };
+  const swatchColor = (b) => {
+    const s = b.state || {};
+    if (s.on === false) return "#222";
+    if (s.hue != null && s.sat != null && s.sat > 5) return `hsl(${s.hue},${s.sat}%,${55 + (100 - s.sat) / 4}%)`;
+    return "#ffe9c4";
+  };
+
+  const labels = () => { try { return JSON.parse(localStorage.getItem("nl-labels") || "{}"); } catch (e) { return {}; } };
+  const labelOf = (b) => labels()[b.key] || b.name;
+  const setLabel = (b, v) => { try { const l = labels(); if (v) l[b.key] = v; else delete l[b.key]; localStorage.setItem("nl-labels", JSON.stringify(l)); } catch (e) {} };
+  function render() {
+    renderGroups();
+    const list = $("list"); list.innerHTML = "";
+    $("count").textContent = bulbs.length ? bulbs.filter((b) => b.status === "ready").length + "/" + bulbs.length + " מחוברות" : "";
+    if (!bulbs.length) list.innerHTML = '<p class="muted" style="margin:4px 0">עוד לא הוספת נורות. לחץ על "הוסף נורה" ובחר נורה מהרשימה שתיפתח.</p>';
+    bulbs.forEach((b) => {
+      const [col, txt] = ST[b.status] || ST.idle;
+      const el = document.createElement("div"); el.className = "bulb";
+      el.innerHTML = `<input type="checkbox" class="chk" ${b.selected ? "checked" : ""} title="בשליטה">
+        <div class="ic" style="background:${swatchColor(b)}"></div>
+        <div class="grow"><div class="nm"></div><div class="st"><span style="color:${col}">●</span> ${txt}${b.statusExtra ? " · " + b.statusExtra : ""}</div></div>`;
+      const nm = el.querySelector(".nm"); nm.textContent = labelOf(b) + " ✎"; nm.style.cursor = "pointer";
+      nm.onclick = () => { const inp = document.createElement("input"); inp.value = labelOf(b); inp.className = "code"; inp.style.cssText = "font-size:16px;padding:6px;letter-spacing:0;text-align:right;direction:rtl";
+        nm.replaceWith(inp); inp.focus(); const done = () => { setLabel(b, inp.value.trim()); render(); }; inp.onblur = done; inp.onkeydown = (e) => { if (e.key === "Enter") inp.blur(); }; };
+      el.querySelector(".chk").onchange = (e) => { b.selected = e.target.checked; };
+      const actions = document.createElement("div"); actions.className = "row"; actions.style.gap = "6px";
+      const mk = (label, fn, cls = "") => { const x = document.createElement("button"); x.className = "btn sm " + cls; x.textContent = label; x.onclick = fn; actions.appendChild(x); };
+      if (b.status === "needcode") mk("הזן קוד", () => askCode(b), "pri");
+      else if (b.status === "error" || b.status === "idle") mk("התחבר", () => start(b));
+      if (b.status === "ready") mk("הבהב", () => { b.set({ on: true }); b.blink(); });
+      mk("✕", () => { if (b.confirmRemove) { b.forget(); bulbs.splice(bulbs.indexOf(b), 1); render(); } else { b.confirmRemove = true; log(b.name + ": לחץ שוב על ✕ כדי להסיר"); setTimeout(() => (b.confirmRemove = false), 3000); } });
+      el.appendChild(actions); list.appendChild(el);
+    });
+  }
+
+  function addDevice(device) {
+    let b = bulbs.find((x) => x.device.id === device.id || (device.name && x.name === device.name));
+    if (b) { b.device = device; } else { b = new Bulb(device, log, render); bulbs.push(b); }
+    render(); start(b);
+  }
+  // codes read from the user's two colour bulbs (Matter manual pairing codes)
+  const KNOWN = [
+    { code: "03967450749", label: "מסדרון 1", group: "מסדרון" },
+    { code: "05939427871", label: "מסדרון 2", group: "מסדרון" },
+    { code: "05436014340", label: "בודדת", group: "בודדת" },
+  ];
+  const KNOWN_CODES = KNOWN.map((k) => k.code);
+  const groupOf = (b) => { const st = b.stored; const k = st && KNOWN.find((x) => x.code === st.code); return k ? k.group : null; };
+  let activeGroup = "הכול";
+  function renderGroups() {
+    const box = $("groups"); box.innerHTML = "";
+    const names = ["הכול", ...new Set(KNOWN.map((k) => k.group))];
+    names.forEach((g) => {
+      const x = document.createElement("button"); x.className = "btn sm" + (g === activeGroup ? " pri" : ""); x.textContent = g;
+      x.onclick = () => { activeGroup = g; bulbs.forEach((b) => (b.selected = g === "הכול" || groupOf(b) === g)); render(); };
+      box.appendChild(x);
+    });
+  }
+  async function start(b) {
+    try {
+      if (await b.connect()) return;
+      for (const code of KNOWN_CODES) {
+        try {
+          log(b.name + ": trying saved code " + code.slice(0, 4) + "…"); await b.pair(code);
+          const k = KNOWN.find((x) => x.code === code); Store.set(b.key, { ...b.stored, code });
+          if (k && !labels()[b.key]) setLabel(b, k.label);
+          render(); return;
+        }
+        catch (e) { if (e instanceof TooMany) throw e; }
+      }
+      b.setStatus("needcode", "הקודים השמורים לא התאימו");
+      askCode(b);
+    } catch (e) { log(b.name + ": " + e.message); }
+  }
+
+  const services = [UUID.legacySvc, UUID.v3Svc, UUID.evSvc];
+  async function pick(all) {
+    if (!bt) return;
+    try {
+      const opts = all ? { acceptAllDevices: true, optionalServices: services }
+        : { filters: [{ manufacturerData: [{ companyIdentifier: 0x080b }] }, { namePrefix: "Nanoleaf" }, { namePrefix: "NL" }], optionalServices: services };
+      const d = await bt.requestDevice(opts);
+      log("picked " + d.name + " (" + d.id.slice(0, 6) + ")");
+      addDevice(d);
+    } catch (e) {
+      if (e.name === "SecurityError") { $("nobt").innerHTML = "הדף פתוח במקום שחוסם Bluetooth. פתח את הקישור ישירות ב-<b>Chrome</b>."; $("nobt").classList.remove("hidden"); }
+      if (e.name !== "NotFoundError") log("chooser: " + e.name + " " + e.message);
+    }
+  }
+  $("add").onclick = () => pick(false);
+  $("addAll").onclick = () => pick(true);
+
+  // ----- pairing dialog -----
+  const dlg = $("dlg"); let dlgBulb = null;
+  function askCode(b) {
+    dlgBulb = b; $("dName").textContent = b.name; $("dCode").value = ""; $("dMsg").textContent = b.statusExtra || "";
+    if (!dlg.open) dlg.showModal();
+  }
+  $("dCancel").onclick = () => dlg.close();
+  $("dOk").onclick = async () => {
+    const b = dlgBulb, v = $("dCode").value;
+    if (!NL.codeCandidates(v).length) { $("dMsg").textContent = "הזן את הקוד"; return; }
+    $("dMsg").textContent = "מתאים… (עד חצי דקה)"; $("dOk").disabled = true;
+    try { await b.pair(v); dlg.close(); }
+    catch (e) { $("dMsg").textContent = "לא הצליח: " + (b.statusExtra || e.message) + ". בדוק את הקוד ושאפליקציית Nanoleaf סגורה."; }
+    finally { $("dOk").disabled = false; }
+  };
+  $("dScan").onclick = () => $("dFile").click();
+  $("dFile").onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    if (!("BarcodeDetector" in window)) { $("dMsg").textContent = "הדפדפן לא יודע לקרוא QR – הקלד את 11 הספרות."; return; }
+    try {
+      const img = await createImageBitmap(f);
+      const codes = await new BarcodeDetector({ formats: ["qr_code"] }).detect(img);
+      const mt = codes.map((c) => c.rawValue).find((v) => /^MT:/i.test(v)) || (codes[0] && codes[0].rawValue);
+      if (!mt) { $("dMsg").textContent = "לא נמצא QR בתמונה – נסה שוב מקרוב."; return; }
+      $("dCode").value = mt; $("dMsg").textContent = "הקוד נקרא ✔ לחץ חבר";
+    } catch (err) { $("dMsg").textContent = "קריאת QR נכשלה: " + err.message; }
+    e.target.value = "";
+  };
+
+  // ----- controls -----
+  const targets = () => bulbs.filter((b) => b.selected && b.status === "ready");
+  const send = (patch) => { const t = targets(); if (!t.length) flashHint(); t.forEach((b) => b.set(patch)); render(); };
+  let hintT; function flashHint() { const h = $("ctrlHint"); h.style.color = "#ffd88a"; h.textContent = bulbs.length ? "אין נורה מחוברת ומסומנת כרגע." : "קודם הוסף נורה למטה."; clearTimeout(hintT); hintT = setTimeout(() => { h.style.color = ""; h.textContent = "השליטה חלה על כל הנורות המסומנות למטה."; }, 2500); }
+
+  $("bOn").onclick = () => send({ on: true });
+  $("bOff").onclick = () => send({ on: false });
+  const bri = $("bri"); const briV = () => ($("briV").textContent = bri.value + "%"); briV();
+  bri.oninput = () => { briV(); send({ bri: +bri.value }); };
+  $("ct").oninput = (e) => send({ ct: +e.target.value });
+
+  const wheel = $("wheel"), dot = $("dot");
+  function placeDot(h, s) { const r = 130 * s / 100, a = (h * Math.PI) / 180; dot.style.left = 130 + r * Math.sin(a) + "px"; dot.style.top = 130 - r * Math.cos(a) + "px"; dot.style.background = `hsl(${h},${s}%,${100 - s / 2}%)`; }
+  function wheelEv(e) {
+    const rc = wheel.getBoundingClientRect(), x = e.clientX - rc.left - rc.width / 2, y = e.clientY - rc.top - rc.height / 2;
+    let h = (Math.atan2(x, -y) * 180) / Math.PI; if (h < 0) h += 360;
+    const s = Math.min(100, (Math.hypot(x, y) / (rc.width / 2)) * 100);
+    placeDot(h, s); send({ hue: h, sat: s });
+  }
+  wheel.addEventListener("pointerdown", (e) => { wheel.setPointerCapture(e.pointerId); wheelEv(e); });
+  wheel.addEventListener("pointermove", (e) => { if (e.buttons || e.pressure) wheelEv(e); });
+  placeDot(0, 0);
+
+  const sw = [["אדום", 0, 100], ["כתום", 25, 100], ["צהוב", 50, 100], ["ירוק", 120, 100], ["טורקיז", 180, 100], ["כחול", 230, 100], ["סגול", 275, 100], ["ורוד", 320, 80], ["חם", "ct", 2700], ["לבן", "ct", 4500]];
+  sw.forEach(([n, h, s]) => {
+    const b = document.createElement("button"); b.title = n; b.setAttribute("aria-label", n);
+    b.style.background = h === "ct" ? (s < 3500 ? "#ffcf8a" : "#f4f6ff") : `hsl(${h},${s}%,55%)`;
+    b.onclick = () => { if (h === "ct") { $("ct").value = s; send({ ct: s }); } else { placeDot(h, s); send({ hue: h, sat: s }); } };
+    $("sw").appendChild(b);
+  });
+
+  $("copyLog").onclick = async () => { try { await navigator.clipboard.writeText(logEl.textContent); $("copyLog").textContent = "הועתק ✔"; } catch (e) {} };
+
+  // ----- restore previously allowed bulbs -----
+  (async () => {
+    render();
+    if (!bt || !bt.getDevices) return;
+    try {
+      const devs = await bt.getDevices(); const saved = Store.all();
+      for (const d of devs) if (saved[d.name || d.id]) { log("restoring " + d.name); addDevice(d); }
+    } catch (e) {}
+  })();
+  log("ready. web-bluetooth=" + !!bt);
+})();
+
+</script>
+</body>
+</html>
