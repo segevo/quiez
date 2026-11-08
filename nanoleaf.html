@@ -101,6 +101,10 @@
   <input type="file" id="dFile" accept="image/*" capture="environment" class="hidden">
   <button class="btn wide sm" id="dScan" style="margin-top:10px">📷 צלם את ה-QR</button>
   <p class="muted" id="dMsg" style="min-height:20px;margin:10px 0"></p>
+  <div id="dLogBox" class="hidden" style="margin-bottom:10px">
+    <button class="btn wide" id="dCopy" style="background:#3a2c10;color:#ffd88a">📋 העתק פרטים ושלח ל-Claude</button>
+    <pre id="dLog" style="white-space:pre-wrap;direction:ltr;text-align:left;font-size:10px;color:#aab;max-height:140px;overflow:auto;background:#0c0d11;padding:8px;border-radius:10px;margin:8px 0 0"></pre>
+  </div>
   <div class="row">
     <button class="btn pri" id="dOk" style="flex:1">חבר</button>
     <button class="btn" id="dCancel">ביטול</button>
@@ -473,7 +477,7 @@ class Bulb {
     let v3svc = null, legSvc = null;
     try { v3svc = await server.getPrimaryService(UUID.v3Svc); } catch (e) {}
     try { legSvc = await server.getPrimaryService(UUID.legacySvc); } catch (e) {}
-    this.log("services: v3=" + !!v3svc + " legacy=" + !!legSvc);
+    this.log("name=" + this.device.name + " services: v3=" + !!v3svc + " legacy=" + !!legSvc);
     const pref = this.stored && this.stored.proto;
     const order = [];
     if (pref === "legacy" && legSvc) order.push("legacy");
@@ -528,7 +532,7 @@ class Bulb {
           this.setStatus("ready"); this.log("paired ✔");
           return;
         } catch (e) {
-          lastErr = e; this.log(kind + " pair failed: " + e.message);
+          lastErr = e; this.log(kind + " pair failed [" + (e.constructor && e.constructor.name) + "/" + e.name + "]: " + e.message);
           if (e instanceof TooMany) { this.setStatus("error", "הנורה לא מקבלת עוד חיבורים — צריך איפוס"); throw e; }
           o = await this.open().catch(() => o); // fresh link before next attempt
         }
@@ -594,7 +598,12 @@ class Bulb {
 (() => {
   const $ = (id) => document.getElementById(id);
   const logEl = $("log");
-  const log = (m) => { const t = new Date().toTimeString().slice(0, 8); logEl.textContent += t + " " + m + "\n"; logEl.scrollTop = 1e9; };
+  try { const old = localStorage.getItem("nl-log"); if (old) logEl.textContent = old + "--- reload ---\n"; } catch (e) {}
+  const log = (m) => {
+    const t = new Date().toTimeString().slice(0, 8); logEl.textContent += t + " " + m + "\n"; logEl.scrollTop = 1e9;
+    try { localStorage.setItem("nl-log", logEl.textContent.split("\n").slice(-150).join("\n")); } catch (e) {}
+    const dl = document.getElementById("dLog"); if (dl && dlg.open) { dl.textContent = logEl.textContent.split("\n").slice(-30).join("\n"); dl.scrollTop = 1e9; }
+  };
   const bulbs = [];
   const bt = navigator.bluetooth;
   if (!bt) $("nobt").classList.remove("hidden");
@@ -707,7 +716,7 @@ class Bulb {
     if (!NL.codeCandidates(v).length) { $("dMsg").textContent = "הזן את הקוד"; return; }
     $("dMsg").textContent = "מתאים… (עד חצי דקה)"; $("dOk").disabled = true;
     try { await b.pair(v); dlg.close(); }
-    catch (e) { $("dMsg").textContent = "לא הצליח: " + (b.statusExtra || e.message) + ". בדוק את הקוד ושאפליקציית Nanoleaf סגורה."; }
+    catch (e) { log("pair error: " + (e && (e.name + " " + e.message))); $("dLogBox").classList.remove("hidden"); $("dMsg").textContent = "לא הצליח: " + (b.statusExtra || e.message) + ". בדוק את הקוד ושאפליקציית Nanoleaf סגורה."; }
     finally { $("dOk").disabled = false; }
   };
   $("dScan").onclick = () => $("dFile").click();
@@ -755,6 +764,7 @@ class Bulb {
     $("sw").appendChild(b);
   });
 
+  $("dCopy").onclick = async () => { try { await navigator.clipboard.writeText(logEl.textContent); $("dCopy").textContent = "הועתק ✔ עכשיו הדבק ל-Claude"; } catch (e) {} };
   $("copyLog").onclick = async () => { try { await navigator.clipboard.writeText(logEl.textContent); $("copyLog").textContent = "הועתק ✔"; } catch (e) {} };
 
   // ----- restore previously allowed bulbs -----
