@@ -466,7 +466,7 @@ class Bulb {
   get stored() { return Store.get(this.key); }
 
   async open() {
-    if (this.device.gatt.connected) { try { this.device.gatt.disconnect(); } catch (e) {} await sleep(300); }
+    if (this.device.gatt.connected) { try { this.device.gatt.disconnect(); } catch (e) {} await sleep(1500); }
     let server, lastErr;
     for (let i = 0; i < 3; i++) {
       try { server = await withTimeout(this.device.gatt.connect(), 15000, "connect"); break; }
@@ -517,16 +517,19 @@ class Bulb {
     const cands = NL.codeCandidates(input);
     if (!cands.length) throw new Error("לא הוזן קוד");
     this.setStatus("pairing");
-    let lastErr;
+    let lastErr, first = true;
     for (const code of cands) {
-      let o;
-      try { o = await this.open(); } catch (e) { this.setStatus("error", e.message); throw e; }
-      for (const kind of o.order) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (!first) await sleep(3000); // the bulb needs a pause after a refusal or a dropped link
+        first = false;
+        let o;
+        try { o = await this.open(); } catch (e) { lastErr = e; this.log("open failed: " + e.message); continue; }
+        const kind = o.order[0];
         try {
           const s = await this.makeSession(o, kind);
-          this.log("pairing via " + kind + " with code " + code.slice(0, 2) + "…");
+          this.log("pairing via " + kind + " with code " + code.slice(0, 2) + "… (try " + (attempt + 1) + ")");
           const r = await s.auth({ code });
-          Store.set(this.key, { proto: kind, token: NL.hex(r.token), clientId: r.clientId ?? null, name: this.name });
+          Store.set(this.key, { proto: kind, token: NL.hex(r.token), clientId: r.clientId ?? null, name: this.name, code: input });
           this.session = s;
           await this.readState();
           this.setStatus("ready"); this.log("paired ✔");
@@ -534,7 +537,7 @@ class Bulb {
         } catch (e) {
           lastErr = e; this.log(kind + " pair failed [" + (e.constructor && e.constructor.name) + "/" + e.name + "]: " + e.message);
           if (e instanceof TooMany) { this.setStatus("error", "הנורה לא מקבלת עוד חיבורים — צריך איפוס"); throw e; }
-          o = await this.open().catch(() => o); // fresh link before next attempt
+          if (e instanceof AuthRefused) break; // the bulb answered: this code is wrong, try the next one
         }
       }
     }
@@ -654,9 +657,9 @@ class Bulb {
   }
   // codes read from the user's two colour bulbs (Matter manual pairing codes)
   const KNOWN = [
-    { code: "03967450749", label: "מסדרון 1", group: "מסדרון" },
-    { code: "05939427871", label: "מסדרון 2", group: "מסדרון" },
-    { code: "05436014340", label: "בודדת", group: "בודדת" },
+    { code: "03967450749", id: "2DA", label: "מסדרון 1", group: "מסדרון" },
+    { code: "05939427871", id: "303", label: "מסדרון 2", group: "מסדרון" },
+    { code: "05436014340", id: "3F8", label: "בודדת", group: "בודדת" },
   ];
   const KNOWN_CODES = KNOWN.map((k) => k.code);
   const groupOf = (b) => { const st = b.stored; const k = st && KNOWN.find((x) => x.code === st.code); return k ? k.group : null; };
@@ -673,7 +676,12 @@ class Bulb {
   async function start(b) {
     try {
       if (await b.connect()) return;
-      for (const code of KNOWN_CODES) {
+      // The bulb's BLE name ends with the ID printed on it (e.g. "Nanoleaf GU10 3F8"): try its own code first,
+      // then codes whose first ID digit matches, and the rest last.
+      const id = ((b.name.match(/([0-9A-F]{3})\s*$/i) || [])[1] || "").toUpperCase();
+      const score = (k) => (k.id === id ? 0 : k.id[0] === id[0] ? 1 : 2);
+      const ordered = [...KNOWN].sort((a, c) => score(a) - score(c)).filter((k) => !id || score(k) < 2 || true).map((k) => k.code);
+      for (const code of ordered) {
         try {
           log(b.name + ": trying saved code " + code.slice(0, 4) + "…"); await b.pair(code);
           const k = KNOWN.find((x) => x.code === code); Store.set(b.key, { ...b.stored, code });
