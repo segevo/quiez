@@ -53,7 +53,7 @@
 </head>
 <body>
 <main>
-  <h1>💡 הנורות שלי <span style="font-size:12px;color:#666;font-weight:400">גרסה 5</span></h1>
+  <h1>💡 הנורות שלי <span style="font-size:12px;color:#666;font-weight:400">גרסה 6</span></h1>
 
   <div id="nobt" class="warn hidden">הדפדפן הזה לא תומך ב-Bluetooth. פתח את הקישור ב-<b>Chrome</b> באנדרואיד (לא בתוך אפליקציה אחרת), וודא ש-Bluetooth ומיקום דלוקים.</div>
 
@@ -651,7 +651,17 @@ class Bulb {
     renderGroups();
     const list = $("list"); list.innerHTML = "";
     $("count").textContent = bulbs.length ? bulbs.filter((b) => b.status === "ready").length + "/" + bulbs.length + " מחוברות" : "";
-    if (!bulbs.length) list.innerHTML = '<p class="muted" style="margin:4px 0">עוד לא הוספת נורות. לחץ על "הוסף נורה" ובחר נורה מהרשימה שתיפתח.</p>';
+    const ghosts = Object.entries(Store.all()).filter(([k]) => !bulbs.find((b) => b.key === k));
+    if (!bulbs.length && !ghosts.length) list.innerHTML = '<p class="muted" style="margin:4px 0">עוד לא הוספת נורות. לחץ על "הוסף נורה" ובחר נורה מהרשימה שתיפתח.</p>';
+    // Bulbs paired before: one tap reconnects (the chooser shows only that bulb), no code needed.
+    ghosts.forEach(([k, v]) => {
+      const el = document.createElement("div"); el.className = "bulb";
+      el.innerHTML = '<div class="ic" style="background:#333"></div><div class="grow"><div class="nm"></div><div class="st">שמורה · לחץ "התחבר" ובחר אותה</div></div>';
+      el.querySelector(".nm").textContent = labels()[k] || v.name || k;
+      const btn = document.createElement("button"); btn.className = "btn sm pri"; btn.textContent = "התחבר";
+      btn.onclick = () => reconnectSaved(k, v);
+      el.appendChild(btn); list.appendChild(el);
+    });
     bulbs.forEach((b) => {
       const [col, txt] = ST[b.status] || ST.idle;
       const el = document.createElement("div"); el.className = "bulb";
@@ -734,6 +744,13 @@ class Bulb {
   function showBanner(t) { const n = $("nobt"); n.textContent = t; n.classList.remove("hidden"); n.scrollIntoView({ behavior: "smooth" }); }
 
   const services = [UUID.legacySvc, UUID.v3Svc, UUID.evSvc];
+  async function reconnectSaved(k, v) {
+    if (!bt) return;
+    try {
+      const d = await bt.requestDevice({ filters: [{ name: v.name || k }], optionalServices: services });
+      log("reconnect picked " + d.name); addDevice(d);
+    } catch (e) { if (e.name !== "NotFoundError") log("chooser: " + e.name + " " + e.message); }
+  }
   async function pick(all) {
     if (!bt) return;
     try {
@@ -819,10 +836,14 @@ class Bulb {
     if (!bt || !bt.getDevices) return;
     try {
       const devs = await bt.getDevices(); const saved = Store.all();
-      for (const d of devs) if (saved[d.name || d.id]) { log("restoring " + d.name); addDevice(d); }
+      for (const d of devs) if (saved[d.name || d.id]) {
+        log("restoring " + d.name);
+        try { if (d.watchAdvertisements) { await d.watchAdvertisements(); } } catch (e) {}
+        addDevice(d);
+      }
     } catch (e) {}
   })();
-  log("ready v5. web-bluetooth=" + !!bt);
+  log("ready v6. getDevices=" + !!(bt && bt.getDevices) + "  web-bluetooth=" + !!bt);
 })();
 
 </script>
